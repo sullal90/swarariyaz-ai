@@ -1,0 +1,189 @@
+{
+  "tuning_system": {
+    "system_type": "Just Intonation (Shadja-Pancham Bhava Basis)",
+    "intervals_relative_cents": {
+      "S": 0,      "r": 112,     "R": 204,     "g": 316, 
+      "G": 386,    "M": 498,     "M'": 590,    "P": 702, 
+      "d": 814,    "D": 906,     "n": 1018,    "N": 1088, 
+      "S'": 1200
+    }
+  },
+  "ragas": [
+    {
+      "name": "Bhairav",
+      "thaat": "Bhairav",
+      "vadi": "d",
+      "samvadi": "r",
+      "time_of_day": "Morning (Pratahkal)",
+      "rules": "Strictly use Komal Re (r) and Komal Dha (d). Completely omit Shuddha R and Shuddha D.",
+      "aroha": ["S", "r", "G", "M", "P", "d", "N", "S'"],
+      "avaroha": ["S'", "N", "d", "P", "M", "G", "r", "S"],
+      "pakad_phrases": ["G M d d P", "M G r r S"]
+    },
+    {
+      "name": "Yaman",
+      "thaat": "Kalyan",
+      "vadi": "N",
+      "samvadi": "G",
+      "time_of_day": "Evening (Pratham Prahar)",
+      "rules": "Strictly use Teevra Madhyam (M'). All other swaras are Shuddha. Sa is frequently skipped in ascending phrases (N_ R G).",
+      "aroha": ["N_", "R", "G", "M'", "D", "N", "S'"],
+      "avaroha": ["S'", "N", "D", "P", "M'", "G", "R", "S"],
+      "pakad_phrases": ["N_ R G", "G M' G", "R S"]
+    },
+    {
+      "name": "Bageshree",
+      "thaat": "Kafi",
+      "vadi": "M",
+      "samvadi": "S",
+      "time_of_day": "Midnight (Ratri ka Teerth Prahar)",
+      "rules": "Features Komal Ga (g) and Komal Ni (n). Pancham (P) is omitted in the Aroha.",
+      "aroha": ["S", "R", "g", "M", "D", "n", "S'"],
+      "avaroha": ["S'", "n", "D", "M", "P", "M", "g", "R", "S"],
+      "pakad_phrases": ["D_ N_ S", "M g R S", "n D M"]
+    },
+    {
+      "name": "Malkauns",
+      "thaat": "Bhairavi",
+      "vadi": "M",
+      "samvadi": "S",
+      "time_of_day": "Late Night",
+      "rules": "Audava-Audava scale (5 notes). Completely omit Rishabh (R/r) and Pancham (P). Uses Komal g, d, n.",
+      "aroha": ["S", "g", "M", "d", "n", "S'"],
+      "avaroha": ["S'", "n", "d", "M", "g", "S"],
+      "pakad_phrases": ["g M d M g S", "n_ d_ n_ S"]
+    },
+    {
+      "name": "Bhupali",
+      "thaat": "Bilawal",
+      "vadi": "G",
+      "samvadi": "D",
+      "time_of_day": "First Prahar of Evening",
+      "rules": "Audava-Audava scale (5 notes). Completely omit Madhyam (M/M') and Nishadh (N/n). All notes are Shuddha.",
+      "aroha": ["S", "R", "G", "P", "D", "S'"],
+      "avaroha": ["S'", "D", "P", "G", "R", "S"],
+      "pakad_phrases": ["G R S D_", "S R G", "P G R S"]
+    },
+    {
+      "name": "Bhairavi",
+      "thaat": "Bhairavi",
+      "vadi": "M",
+      "samvadi": "S",
+      "time_of_day": "Morning / Concluding Scale",
+      "rules": "All four flat notes are active: Komal r, g, d, n. Sampoorna scale structure.",
+      "aroha": ["S", "r", "g", "M", "P", "d", "n", "S'"],
+      "avaroha": ["S'", "n", "d", "P", "M", "g", "r", "S"],
+      "pakad_phrases": ["S r g M", "P d n d P", "M g r S"]
+    },
+    {
+      "name": "Jaunpuri",
+      "thaat": "Asavari",
+      "vadi": "d",
+      "samvadi": "g",
+      "time_of_day": "Late Morning",
+      "rules": "Uses Komal g, d, n. Gandhar (g) is strictly omitted in the ascending Aroha line.",
+      "aroha": ["S", "R", "M", "P", "d", "n", "S'"],
+      "avaroha": ["S'", "n", "d", "P", "M", "g", "R", "S"],
+      "pakad_phrases": ["M P d n d P", "M g R S"]
+    },
+    {
+      "name": "Todi",
+      "thaat": "Todi",
+      "vadi": "d",
+      "samvadi": "g",
+      "time_of_day": "Late Morning",
+      "rules": "Highly complex microtonal cluster: features Komal r, Komal g, Komal d, and Teevra M'.",
+      "aroha": ["S", "r", "g", "M'", "P", "d", "N", "S'"],
+      "avaroha": ["S'", "N", "d", "P", "M'", "g", "r", "S"],
+      "pakad_phrases": ["r g r S", "M' d N d P", "g M' r g r S"]
+    },
+    {
+      "name": "Kafi",
+      "thaat": "Kafi",
+      "vadi": "P",
+      "samvadi": "S",
+      "time_of_day": "Anytime / Evening Focus",
+      "rules": "Uses Komal Ga (g) and Komal Nishadh (n). Fundamental parent scale framework.",
+      "aroha": ["S", "R", "g", "M", "P", "D", "n", "S'"],
+      "avaroha": ["S'", "n", "D", "P", "M", "g", "R", "S"],
+      "pakad_phrases": ["R R g g M M P", "m g R S"]
+    },
+    {
+      "name": "Khamaj",
+      "thaat": "Khamaj",
+      "vadi": "G",
+      "samvadi": "N",
+      "time_of_day": "Second Prahar of Night",
+      "rules": "Shuddha Ni (N) used in Aroha; Komal Ni (n) strictly used in Avaroha. Rishabh (R) is skipped in Aroha.",
+      "aroha": ["S", "G", "M", "P", "D", "N", "S'"],
+      "avaroha": ["S'", "n", "D", "P", "M", "G", "R", "S"],
+      "pakad_phrases": ["N_ S G M P", "D n D P", "M G R S"]
+    },
+    {
+      "name": "Marwa",
+      "thaat": "Marwa",
+      "vadi": "r",
+      "samvadi": "D",
+      "time_of_day": "Sunset (Sandhiprakash)",
+      "rules": "Features Komal r and Teevra M'. Pancham (P) is completely omitted from the scale.",
+      "aroha": ["S", "r", "G", "M'", "D", "N", "S'"],
+      "avaroha": ["S'", "N", "D", "M'", "G", "r", "S"],
+      "pakad_phrases": ["D M' G r", "r_ S", "N_ r G"]
+    },
+    {
+      "name": "Poorvi",
+      "thaat": "Poorvi",
+      "vadi": "G",
+      "samvadi": "N",
+      "time_of_day": "Sunset (Sandhiprakash)",
+      "rules": "Features Komal r, Komal d, and Teevra M'. Employs both Shuddha M and Teevra M' in specific phrases.",
+      "aroha": ["S", "r", "G", "M'", "P", "d", "N", "S'"],
+      "avaroha": ["S'", "N", "d", "P", "M'", "G", "M G", "r", "S"],
+      "pakad_phrases": ["N_ r G M' P", "d M' P G", "M G r S"]
+    },
+    {
+      "name": "Ahir Bhairav",
+      "thaat": "Bhairav",
+      "vadi": "M",
+      "samvadi": "S",
+      "time_of_day": "Early Morning",
+      "rules": "A fascinating blend: uses Komal Rishabh (r) from Bhairav Thaat, but Komal Nishadh (n) from Kafi Thaat.",
+      "aroha": ["S", "r", "G", "M", "P", "D", "n", "S'"],
+      "avaroha": ["S'", "n", "D", "P", "M", "G", "r", "S"],
+      "pakad_phrases": ["r G M", "G M r S", "P D n D P"]
+    },
+    {
+      "name": "Dhani",
+      "thaat": "Kafi",
+      "vadi": "g",
+      "samvadi": "n",
+      "time_of_day": "Afternoon",
+      "rules": "Audava-Audava scale (5 notes). Rishabh (R) and Dhaivat (D) are completely omitted. Uses Komal g and n.",
+      "aroha": ["S", "g", "M", "P", "n", "S'"],
+      "avaroha": ["S'", "n", "P", "M", "g", "S"],
+      "pakad_phrases": ["g M P n P", "M g S"]
+    },
+    {
+      "name": "Darbari Kanada",
+      "thaat": "Asavari",
+      "vadi": "R",
+      "samvadi": "P",
+      "time_of_day": "Midnight",
+      "rules": "Features Komal g, d, n. Requires deep, slow microtonal oscillations (Andolan) on Komal g and Komal d to remain authentic.",
+      "aroha": ["S", "R", "g", "M", "P", "d", "n", "S'"],
+      "avaroha": ["S'", "n", "d", "P", "M", "P", "g", "M", "R", "S"],
+      "pakad_phrases": ["R_ S_ D__ n__ S", "R g R S"]
+    },
+    {
+      "name": "Durga",
+      "thaat": "Bilawal",
+      "vadi": "M",
+      "samvadi": "S",
+      "time_of_day": "Late Night (Ratri ka Doosra Prahar)",
+      "rules": "Audava-Audava scale (5 notes). Completely omit Gandhar (G) and Nishadh (N). All active tones are Shuddha. Melodic focus emphasizes bold, sweeping glides between Ma and Dha.",
+      "aroha": ["S", "R", "M", "P", "D", "S'"],
+      "avaroha": ["S'", "D", "P", "M", "R", "S"],
+      "pakad_phrases": ["M P D M R", "d_ S R S"]
+    }
+  ]
+}

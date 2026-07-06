@@ -328,8 +328,8 @@ with st.sidebar:
                         f"Aroha: {'->'.join(aroha_scale)}, Rules: {rules}. Question: {chat_input}"
                     )
                     try:
-                        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                        reply = response.text
+                        # Call the true ADK session turn wrapper instead of raw model clients
+                        reply = orch.consult_guru_agent(chat_input, raga_profile)
                     except Exception:
                         reply = "Theory lookup module active."
                 st.session_state.chat_history.append({"role": "assistant", "content": reply})

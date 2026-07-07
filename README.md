@@ -21,6 +21,8 @@ Not yet implemented in this submission: Antigravity IDE workflow.
 ---
 
 ## 🏗️ System Architecture & File Layout
+<img width="2720" height="1760" alt="swarariyaz_architecture_final" src="https://github.com/user-attachments/assets/326acc86-c1d5-4c54-bdec-478896083310" />
+
 ```text
 swarariyaz-ai/
 ├── data_vault/

@@ -1,11 +1,8 @@
 # src/app.py
 import streamlit as st
 import numpy as np
-import io
-import wave
-from google import genai
-from main import UserSessionState, SwaraRiyazOrchestrator
-from pitch_detection import analyze_pitch_trajectory
+from main import UserSessionState, SwaraRiyazOrchestrator, GuruAgentError
+from live_guru import VocalPitchTrackingSkill
 
 st.set_page_config(
     page_title="SwaraRiyaz — Hindustani Practice Studio",
@@ -14,10 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-try:
-    client = genai.Client()
-except Exception:
-    client = None
+_pitch_skill = VocalPitchTrackingSkill()
 
 # ---------------------------------------------------------------------------
 # PRAHAR (TIME-OF-DAY) MAP — real Hindustani tradition assigns each raga a
@@ -239,27 +233,15 @@ def synthesize_tanpura_drone(base_hz, duration=4.0, sample_rate=22050):
 
 def analyze_directional_pitch_trajectory(audio_bytes, focus_mode, num_notes=6):
     """
-    Returns a list of per-note pitch estimates in Hz using YIN detection, one
-    entry per note in the target sequence (num_notes). Entries are `None`
-    where no confident pitch was found (silence, breath, noise-dominated
-    chunk, or mains hum) rather than a fabricated value.
+    Returns a list of per-note pitch estimates in Hz, one entry per note in
+    the target sequence (num_notes). Entries are `None` where no confident
+    pitch was found (silence, breath, noise, mains hum).
 
-    fmin is set to 100 Hz (rather than the module default of 60 Hz) because
-    this app's practice range never goes that low, and 60 Hz is exactly
-    where US electrical mains hum sits — a common false-positive source when
-    a chunk is otherwise quiet.
+    This delegates to VocalPitchTrackingSkill (live_guru.py) rather than
+    duplicating its detection logic here, so the acoustic front-end has a
+    single source of truth.
     """
-    try:
-        with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
-            sample_rate = wav_file.getframerate()
-            n_frames = wav_file.getnframes()
-            data = wav_file.readframes(n_frames)
-            samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-            return analyze_pitch_trajectory(
-                samples, sample_rate, steps=num_notes, fmin=100.0, fmax=650.0
-            )
-    except Exception:
-        return [None] * num_notes
+    return _pitch_skill.execute(audio_bytes, focus_mode, num_notes=num_notes)
 
 
 CENTS = {
@@ -307,18 +289,13 @@ with st.sidebar:
         chat_input = st.chat_input("Ask about microtones...")
         if chat_input:
             st.session_state.chat_history.append({"role": "user", "content": chat_input})
-            if client:
-                with st.spinner("Consulting library..."):
-                    prompt = (
-                        f"You are an expert Hindustani Classical Musicology Professor. "
-                        f"Answer accurately in 2 sentences. Context Raaga {orch.state.active_raaga}, "
-                        f"Aroha: {'->'.join(aroha_scale)}, Rules: {rules}. Question: {chat_input}"
-                    )
-                    try:
-                        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                        reply = response.text
-                    except Exception:
-                        reply = "Theory lookup module active."
+            with st.spinner("Consulting the guru agent..."):
+                try:
+                    reply = orch.consult_guru_agent(chat_input, raga_profile)
+                except GuruAgentError as e:
+                    reply = None
+                    st.error(f"Couldn't reach the guru agent: {e}")
+            if reply is not None:
                 st.session_state.chat_history.append({"role": "assistant", "content": reply})
                 st.rerun()
 
@@ -409,29 +386,23 @@ with tab_drill:
                                 f"segments — the rest may have been too quiet or noisy."
                             )
 
-                        if client:
-                            prompt = f"""
-                            You are an expert Hindustani Classical Vocal Guru evaluating a student's
-                            isolated practice recording. They are singing the {drill_direction} scale
-                            of Raaga {orch.state.active_raaga} relative to a base Sa of {orch.state.tonic_hz} Hz.
-
-                            Expected swara order: {', '.join(target_sequence)}
-                            Parsed frequency sequence from their recording, in order: {', '.join(readable_trajectory)}.
-                            Some segments may say "no clear pitch detected" — treat those as missing
-                            data (e.g. a breath or gap), not as an intonation error.
-
-                            Evaluate alignment directly:
-                            - Note whether the sequence climbs/falls smoothly along the target intervals.
-                            - Point out which swaras are sharp (Teevra) or flat (Komal).
-                            Give a precise, encouraging 2-sentence lesson.
-                            """
-                            try:
-                                response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                                st.session_state.live_guru_text = response.text.strip()
-                            except Exception:
-                                st.session_state.live_guru_text = (
-                                    "Your steady breath on Sa is strong. Keep the vocal column centered as you expand."
-                                )
+                        evaluation_query = (
+                            f"Evaluate a student's isolated practice recording. They are singing "
+                            f"the {drill_direction} scale of this raga. Expected swara order: "
+                            f"{', '.join(target_sequence)}. Parsed frequency sequence from their "
+                            f"recording, in order: {', '.join(readable_trajectory)}. Some segments "
+                            f"may say \"no clear pitch detected\" — treat those as missing data "
+                            f"(e.g. a breath or gap), not as an intonation error. Note whether the "
+                            f"sequence climbs/falls smoothly along the target intervals, and point "
+                            f"out which swaras are sharp (Teevra) or flat (Komal)."
+                        )
+                        try:
+                            st.session_state.live_guru_text = orch.consult_guru_agent(
+                                evaluation_query, raga_profile
+                            )
+                        except GuruAgentError as e:
+                            st.session_state.live_guru_text = None
+                            st.error(f"Couldn't reach the guru agent for feedback: {e}")
 
     with right:
         st.markdown("**2. Feedback**")

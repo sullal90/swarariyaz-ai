@@ -1,6 +1,7 @@
 # src/main.py
 import dataclasses
 import os
+import logging
 import asyncio
 from google.adk.agents import Agent
 from google.adk.runners import Runner
@@ -9,9 +10,22 @@ from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
 from google.adk.tools.mcp_tool import StreamableHTTPConnectionParams
 from google.genai import types
 
+logger = logging.getLogger(__name__)
+
 # Set via docker-compose for the containerized service, defaults to localhost
 # for local (non-docker) development.
 MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8000/mcp")
+
+
+class GuruAgentError(Exception):
+    """
+    Raised when the ADK agent run fails — e.g. the MCP server is unreachable,
+    the Gemini API call fails, or the run produces no usable response.
+    Callers (the Streamlit UI) should catch this and show the user an honest
+    message, rather than silently falling back to a hardcoded string that
+    looks like a normal response.
+    """
+    pass
 
 
 @dataclasses.dataclass
@@ -88,9 +102,15 @@ class SwaraRiyazOrchestrator:
             self._session_ready = True
 
     async def _consult_guru_agent_async(self, user_query: str, raga_context: dict) -> str:
-        """Runs the ADK agent through its actual Runner. The agent may call
-        out to the MCP server's evaluate_vocal_pitch tool mid-turn if it
-        needs exact pitch-drift numbers to answer well."""
+        """
+        Runs the ADK agent through its actual Runner. The agent may call out
+        to the MCP server's evaluate_vocal_pitch tool mid-turn if it needs
+        exact pitch-drift numbers to answer well.
+
+        Raises GuruAgentError on failure (MCP server unreachable, Gemini API
+        error, or no usable response produced) — callers should catch this
+        and show the user an honest message rather than a fake success string.
+        """
         await self._ensure_session()
 
         context_query = (
@@ -100,7 +120,7 @@ class SwaraRiyazOrchestrator:
         )
         message = types.Content(role="user", parts=[types.Part(text=context_query)])
 
-        final_text = "Acoustic knowledge bank synced."
+        final_text = None
         try:
             for event in self._runner.run(
                 user_id=self.state.user_id,
@@ -109,10 +129,24 @@ class SwaraRiyazOrchestrator:
             ):
                 if event.is_final_response() and event.content and event.content.parts:
                     final_text = event.content.parts[0].text
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("ADK agent run failed (query=%r): %s", user_query, e, exc_info=True)
+            raise GuruAgentError(
+                f"The guru agent couldn't complete this request: {e}"
+            ) from e
+
+        if final_text is None:
+            logger.warning("ADK agent run produced no final response (query=%r)", user_query)
+            raise GuruAgentError(
+                "The guru agent ran but didn't produce a response — try again."
+            )
+
         return final_text
 
     def consult_guru_agent(self, user_query: str, raga_context: dict) -> str:
-        """Sync wrapper so Streamlit callbacks can call this directly."""
+        """
+        Sync wrapper so Streamlit callbacks can call this directly.
+        Raises GuruAgentError on failure — callers should catch and display
+        it rather than letting it crash the app or masking it silently.
+        """
         return asyncio.run(self._consult_guru_agent_async(user_query, raga_context))

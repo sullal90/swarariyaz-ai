@@ -1,24 +1,60 @@
 # src/mcp_server.py
 import json
 import math
-# CHANGE THIS LINE: Import FastMCP instead of Server
+import re
+import time
+from collections import defaultdict, deque
+
 from mcp.server.fastmcp import FastMCP
 
-# CHANGE THIS LINE: Initialize app using FastMCP
 app = FastMCP("swarariyaz-core-math")
+
+# --- Security: input validation constants -----------------------------------
+RAGA_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z ]{0,39}$")          # letters/spaces, max 40 chars
+VALID_SWARAS = {"S", "r", "R", "g", "G", "M", "M'", "P", "d", "D", "n", "N", "S'", "N_"}
+MIN_VOCAL_HZ, MAX_VOCAL_HZ = 50.0, 1200.0                         # realistic human vocal range
+
+# --- Security: simple in-memory rate limiting --------------------------------
+RATE_LIMIT_CALLS = 30      # max calls
+RATE_LIMIT_WINDOW = 60     # per this many seconds, per tool
+_call_log = defaultdict(deque)
+
+
+def _rate_limited(tool_name: str) -> bool:
+    now = time.time()
+    log = _call_log[tool_name]
+    while log and now - log[0] > RATE_LIMIT_WINDOW:
+        log.popleft()
+    if len(log) >= RATE_LIMIT_CALLS:
+        return True
+    log.append(now)
+    return False
+
+
+def _load_lexicon() -> dict:
+    with open("data_vault/raga_lexicon.json", "r") as f:
+        return json.load(f)
+
 
 @app.tool()
 def get_raaga_profile(raaga_name: str) -> dict:
     """Retrieves metadata, intervals, structures, and structural constraint rules for any Raaga."""
+    if _rate_limited("get_raaga_profile"):
+        return {"status": "error", "message": "Rate limit exceeded. Please slow down."}
+
+    if not isinstance(raaga_name, str) or not RAGA_NAME_RE.match(raaga_name.strip()):
+        return {"status": "error", "message": "Invalid raaga name format."}
+
     try:
-        with open("data_vault/raga_lexicon.json", "r") as f:
-            db = json.load(f)
+        db = _load_lexicon()
         for raga in db["ragas"]:
-            if raga["name"].lower() == raaga_name.lower():
+            if raga["name"].lower() == raaga_name.strip().lower():
                 return {"status": "success", "profile": raga}
-        return {"status": "error", "message": f"Raaga '{raaga_name}' not found."}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": f"Raaga '{raaga_name.strip()}' not found."}
+    except Exception:
+        # Don't leak internal exception details (file paths, tracebacks) to the client
+        return {"status": "error", "message": "Unable to load raaga data."}
+
 
 @app.tool()
 def evaluate_vocal_pitch(target_swara: str, observed_hz: float, tonic_sa_hz: float) -> dict:
@@ -26,32 +62,45 @@ def evaluate_vocal_pitch(target_swara: str, observed_hz: float, tonic_sa_hz: flo
     Converts absolute vocal Hz into log-cents deviations relative to custom Sa.
     Checks accuracy thresholds against classical Just Intonation parameters.
     """
-    if observed_hz <= 0 or tonic_sa_hz <= 0:
-        return {"status": "error", "message": "Invalid frequency metrics provided."}
-        
+    if _rate_limited("evaluate_vocal_pitch"):
+        return {"status": "error", "message": "Rate limit exceeded. Please slow down."}
+
+    if not isinstance(target_swara, str) or target_swara not in VALID_SWARAS:
+        return {"status": "error", "message": "Invalid target swara."}
+
     try:
-        with open("data_vault/raga_lexicon.json", "r") as f:
-            db = json.load(f)
-            
+        observed_hz = float(observed_hz)
+        tonic_sa_hz = float(tonic_sa_hz)
+    except (TypeError, ValueError):
+        return {"status": "error", "message": "Frequencies must be numeric."}
+
+    if not (MIN_VOCAL_HZ <= observed_hz <= MAX_VOCAL_HZ):
+        return {"status": "error", "message": f"observed_hz out of realistic vocal range ({MIN_VOCAL_HZ}-{MAX_VOCAL_HZ} Hz)."}
+    if not (MIN_VOCAL_HZ <= tonic_sa_hz <= MAX_VOCAL_HZ):
+        return {"status": "error", "message": f"tonic_sa_hz out of realistic vocal range ({MIN_VOCAL_HZ}-{MAX_VOCAL_HZ} Hz)."}
+
+    try:
+        db = _load_lexicon()
         intervals = db["tuning_system"]["intervals_relative_cents"]
         if target_swara not in intervals:
             return {"status": "error", "message": f"Unknown target note '{target_swara}'"}
-            
-        # 1. Calculate actual observed cents from user's custom Sa baseline
+
         actual_cents = 1200 * math.log2(observed_hz / tonic_sa_hz)
         target_cents = intervals[target_swara]
-        
-        # Adjust for octave variances if user sings higher/lower than base tonic range
-        while actual_cents < -100: actual_cents += 1200
-        while actual_cents > 1300: actual_cents -= 1200
-        
+
+        while actual_cents < -100:
+            actual_cents += 1200
+        while actual_cents > 1300:
+            actual_cents -= 1200
+
         cents_drift = actual_cents - target_cents
-        
-        # 2. Assign performance index categorization
+
         status = "Perfect (Sustained)"
-        if cents_drift > 12: status = "Teevra (Sharp)"
-        elif cents_drift < -12: status = "Komal / Flat"
-        
+        if cents_drift > 12:
+            status = "Teevra (Sharp)"
+        elif cents_drift < -12:
+            status = "Komal / Flat"
+
         return {
             "status": "success",
             "target_cents": target_cents,
@@ -59,8 +108,9 @@ def evaluate_vocal_pitch(target_swara: str, observed_hz: float, tonic_sa_hz: flo
             "drift_cents": round(cents_drift, 1),
             "intonation_status": status
         }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    except Exception:
+        return {"status": "error", "message": "Unable to evaluate pitch."}
+
 
 if __name__ == "__main__":
     app.run()

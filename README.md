@@ -1,19 +1,20 @@
 # 🎵 SwaraRiyazAI: Multimodal Musicology Agent
 
-SwaraRiyazAI is an interactive practice studio engineered to democratize and preserve the complex oral tradition of Hindustani Classical Vocal Training. Powered by a decoupled architecture combining advanced time-series audio signal processing, a standalone Model Context Protocol (MCP) server, and the official Google Agent Development Kit (ADK), it serves as an anytime-available automated "AI Vocal Guru."
+SwaraRiyazAI is an interactive practice studio built to support the oral tradition of Hindustani Classical vocal training. It combines real-time acoustic signal processing, a standalone Model Context Protocol (MCP) server, and the official Google Agent Development Kit (ADK) to act as an on-demand AI Vocal Guru — evaluating pitch accuracy against classical raga structures and giving spoken-style corrective feedback.
 
 ---
 
 ## 🏆 Course Evaluation Matrix Alignment
-This repository is engineered to fully satisfy the technical criteria defined in the Capstone evaluation rubrics:
 
-| Key Course Concept | Implementation File | Technical Verification |
+| Key Course Concept | Implementation | Verification |
 | :--- | :--- | :--- |
-| **Agent / Multi-agent (ADK)** | `src/main.py` | Instantiates a true `google.adk.agents.Agent` instance, orchestrating pedagogical execution boundaries and setting runtime instructions. |
-| **MCP Server** | `src/mcp_server.py` | Implements a robust `fastmcp.FastMCP` standalone architecture parsing contextual structures from `data_vault/raga_lexicon.json`. |
-| **Agent Skills** | `src/live_guru.py` | Encapsulates the core algorithmic voice tracking processing logic inside a dedicated computational custom `VocalPitchTrackingSkill`. |
-| **Security Features** | `.env` / `docker-compose.yml` | Full decoupling of sensitive application parameters, environment secret containment, and sandbox process boundary isolation. |
-| **Deployability** | `docker-compose.yml` | Containerized build blueprint orchestrating multi-service networks (Frontend + MCP) with a single command line call. |
+| **Agent (ADK)** | `src/main.py` | Instantiates a real `google.adk.agents.Agent`, and executes it through ADK's own `Runner` + `InMemorySessionService` — the agent is actually run through the framework, not just referenced. |
+| **MCP Server** | `src/mcp_server.py` | Standalone `fastmcp.FastMCP` server exposing two tools (`get_raaga_profile`, `evaluate_vocal_pitch`) that read structured raga data from `data_vault/raga_lexicon.json`. |
+| **Agent Skills** | `src/live_guru.py` | `VocalPitchTrackingSkill` — a self-contained, named skill class with a single `execute()` entry point encapsulating pitch-trajectory analysis. *Not yet called through ADK's own skill/tool registration — `app.py` currently invokes the equivalent logic directly rather than through this class.* |
+| **Security Features** | `src/mcp_server.py` | Input validation (regex allow-list on raga names, swara whitelist), bounds-checked vocal frequency ranges, generic error responses (no internal exception/path leakage), and basic per-tool rate limiting. |
+| **Deployability** | `docker-compose.yml` | Two-service container topology (MCP server + Streamlit frontend) brought up with a single command. |
+
+Not yet implemented in this submission: Antigravity IDE workflow.
 
 ---
 
@@ -21,35 +22,57 @@ This repository is engineered to fully satisfy the technical criteria defined in
 ```text
 swarariyaz-ai/
 ├── data_vault/
-│   └── raga_lexicon.json       # Structural domain knowledge constraints
+│   └── raga_lexicon.json       # Structural raga data (aroha/avaroha, vadi/samvadi, tuning intervals)
 ├── src/
-│   ├── app.py                  # Responsive Streamlit studio dashboard
-│   ├── main.py                 # Core Google ADK orchestration hub
-│   ├── mcp_server.py           # Standalone Model Context Protocol server
-│   └── live_guru.py            # Computational frequency tracking skill
-├── .env                        # Isolated environment variables & API configs
-├── docker-compose.yml          # Container orchestration topology
-└── requirements.txt            # Production build dependencies
+│   ├── app.py                  # Streamlit practice studio UI
+│   ├── main.py                 # ADK Agent + Runner orchestration
+│   ├── mcp_server.py           # Standalone MCP server (raga lookup + pitch evaluation tools)
+│   └── live_guru.py            # VocalPitchTrackingSkill — standalone pitch-analysis skill class
+├── .env                        # Local environment variables (API keys) — not committed
+├── docker-compose.yml          # Container orchestration for MCP server + frontend
+└── requirements.txt            # Python dependencies
+```
 
+---
 
-🚀 Quickstart Deployment
-📦 Running Natively via Docker Compose
-To deploy the entire multi-service ecosystem securely inside an isolated runtime container environment, execute:
+## 🚀 Quickstart
 
-Bash
+### Docker Compose (recommended)
+Brings up both the MCP server and the Streamlit frontend together:
+```bash
 docker-compose up --build
-Once initialized, open your browser to http://localhost:8501 to access the interactive studio canvas.
+```
+Then open **http://localhost:8501** in your browser.
 
-🐍 Local Development Setup
-Install Dependencies:
-
-Bash
+### Local development
+```bash
 pip install -r requirements.txt
-Launch the MCP Context Node:
 
-Bash
+# in one terminal — start the MCP server
 python src/mcp_server.py
-Run the Interactive Dashboard:
 
-Bash
+# in another terminal — start the UI
 streamlit run src/app.py
+```
+
+Set your Gemini API key before running either path:
+```bash
+export GEMINI_API_KEY="your_api_key_here"
+```
+
+---
+
+## 🎼 Core Features
+
+- **Prahar (time-of-day) ambient engine** — the interface's color gradient and iconography shift based on the traditional performance time of the selected raga (dawn tones for Bhairav, deep night for Malkauns, etc.), reflecting real Hindustani performance conventions rather than arbitrary theming.
+- **Acoustic overtone synthesis** — reference swara playback and tanpura drone are synthesized with multi-harmonic overtones rather than flat sine tones.
+- **Vocal pitch evaluation** — records a practice take, estimates pitch trajectory across the phrase, and scores drift in cents against the raga's expected intervals.
+- **Raga-aware theory chat** — a sidebar assistant answers questions grounded in the currently selected raga's rules and structure.
+
+---
+
+## ⚠️ Known Limitations
+
+- Pitch detection in `app.py` uses a simplified zero-crossing estimate rather than a robust algorithm (e.g. YIN/CREPE); accuracy on real microphone input may be inconsistent.
+- `live_guru.py` is an early prototype for a real-time voice session and is not yet wired into the main app flow.
+- Rate limiting in `mcp_server.py` is in-memory only and resets on restart — fine for a demo/capstone context, not production-grade.

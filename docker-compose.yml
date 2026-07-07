@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mcp-server:
     build:
@@ -22,5 +20,6 @@ services:
       - .:/app
     environment:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - MCP_SERVER_URL=http://mcp-server:8000/mcp
     depends_on:
       - mcp-server

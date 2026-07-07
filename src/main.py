@@ -1,10 +1,17 @@
 # src/main.py
 import dataclasses
+import os
 import asyncio
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.adk.tools.mcp_tool.mcp_toolset import McpToolset
+from google.adk.tools.mcp_tool import StreamableHTTPConnectionParams
 from google.genai import types
+
+# Set via docker-compose for the containerized service, defaults to localhost
+# for local (non-docker) development.
+MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL", "http://localhost:8000/mcp")
 
 
 @dataclasses.dataclass
@@ -24,17 +31,27 @@ class SwaraRiyazOrchestrator:
     def __init__(self, session_state: UserSessionState):
         self.state = session_state
 
-        # Real ADK Agent — this is what actually gets executed, not just referenced
+        # Connects the agent directly to our own MCP server's tools
+        # (get_raaga_profile, evaluate_vocal_pitch) via the real MCP protocol,
+        # instead of hand-building a prompt string with the raw math baked in.
+        mcp_toolset = McpToolset(
+            connection_params=StreamableHTTPConnectionParams(url=MCP_SERVER_URL)
+        )
+
         self.guru_agent = Agent(
             name="GuruMusicologyAgent",
             model="gemini-2.5-flash",
             instruction=(
                 "You are an expert Hindustani Classical Musicology Professor. "
-                "Answer accurately in 2 sentences."
+                "When asked to evaluate a student's pitch, call the "
+                "evaluate_vocal_pitch tool for the relevant swara(s) to get "
+                "exact cents drift rather than estimating it yourself. Use "
+                "get_raaga_profile if you need structural raga details. "
+                "Answer accurately and encouragingly in 2 sentences."
             ),
+            tools=[mcp_toolset],
         )
 
-        # ADK session service + runner — the actual execution path for the agent
         self._session_service = InMemorySessionService()
         self._runner = Runner(
             agent=self.guru_agent,
@@ -71,11 +88,14 @@ class SwaraRiyazOrchestrator:
             self._session_ready = True
 
     async def _consult_guru_agent_async(self, user_query: str, raga_context: dict) -> str:
-        """Runs the ADK agent through its actual Runner instead of a raw genai call."""
+        """Runs the ADK agent through its actual Runner. The agent may call
+        out to the MCP server's evaluate_vocal_pitch tool mid-turn if it
+        needs exact pitch-drift numbers to answer well."""
         await self._ensure_session()
 
         context_query = (
             f"Context Raaga: {self.state.active_raaga}. "
+            f"Tonic Sa: {self.state.tonic_hz} Hz. "
             f"Rules: {raga_context['rules']}. Query: {user_query}"
         )
         message = types.Content(role="user", parts=[types.Part(text=context_query)])

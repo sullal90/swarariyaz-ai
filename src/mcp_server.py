@@ -7,7 +7,7 @@ from collections import defaultdict, deque
 
 from mcp.server.fastmcp import FastMCP
 
-app = FastMCP("swarariyaz-core-math")
+app = FastMCP("swarariyaz-core-math", host="0.0.0.0", port=8000)
 
 # --- Security: input validation constants -----------------------------------
 RAGA_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z ]{0,39}$")          # letters/spaces, max 40 chars
@@ -113,4 +113,4 @@ def evaluate_vocal_pitch(target_swara: str, observed_hz: float, tonic_sa_hz: flo
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(transport="streamable-http")

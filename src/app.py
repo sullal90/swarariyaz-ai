@@ -2,10 +2,10 @@
 import streamlit as st
 import numpy as np
 import io
-import random
 import wave
 from google import genai
 from main import UserSessionState, SwaraRiyazOrchestrator
+from pitch_detection import analyze_pitch_trajectory
 
 st.set_page_config(
     page_title="SwaraRiyaz — Hindustani Practice Studio",
@@ -237,42 +237,29 @@ def synthesize_tanpura_drone(base_hz, duration=4.0, sample_rate=22050):
     return ((drone / np.max(np.abs(drone))) * 0.35).astype(np.float32)
 
 
-def analyze_directional_pitch_trajectory(audio_bytes, focus_mode):
+def analyze_directional_pitch_trajectory(audio_bytes, focus_mode, num_notes=6):
+    """
+    Returns a list of per-note pitch estimates in Hz using YIN detection, one
+    entry per note in the target sequence (num_notes). Entries are `None`
+    where no confident pitch was found (silence, breath, noise-dominated
+    chunk, or mains hum) rather than a fabricated value.
+
+    fmin is set to 100 Hz (rather than the module default of 60 Hz) because
+    this app's practice range never goes that low, and 60 Hz is exactly
+    where US electrical mains hum sits — a common false-positive source when
+    a chunk is otherwise quiet.
+    """
     try:
         with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
             sample_rate = wav_file.getframerate()
             n_frames = wav_file.getnframes()
             data = wav_file.readframes(n_frames)
             samples = np.frombuffer(data, dtype=np.int16).astype(np.float32)
-
-            steps = 6
-            chunk_size = len(samples) // steps
-            pitch_trajectory = []
-
-            if "ASCENDING" in focus_mode:
-                targets = [246.9, 277.2, 311.1, 330.0, 370.0, 415.3]
-            else:
-                targets = [415.3, 370.0, 330.0, 311.1, 277.2, 246.9]
-
-            for i in range(steps):
-                start = i * chunk_size
-                end = start + chunk_size
-                chunk = samples[start:end]
-                crossings = np.where(np.diff(np.sign(chunk)))[0]
-                duration = chunk_size / sample_rate
-
-                if len(crossings) > 0 and duration > 0:
-                    hz = (len(crossings) / 2) / duration
-                    if 100 <= hz <= 480:
-                        pitch_trajectory.append(round(hz, 1))
-                        continue
-
-                drift = random.uniform(-3.5, 4.2)
-                pitch_trajectory.append(round(targets[i] + drift, 1))
-
-            return pitch_trajectory
+            return analyze_pitch_trajectory(
+                samples, sample_rate, steps=num_notes, fmin=100.0, fmax=650.0
+            )
     except Exception:
-        return [277.2, 293.7, 311.1, 330.0, 370.0, 411.9]
+        return [None] * num_notes
 
 
 CENTS = {
@@ -328,8 +315,8 @@ with st.sidebar:
                         f"Aroha: {'->'.join(aroha_scale)}, Rules: {rules}. Question: {chat_input}"
                     )
                     try:
-                        # Call the true ADK session turn wrapper instead of raw model clients
-                        reply = orch.consult_guru_agent(chat_input, raga_profile)
+                        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                        reply = response.text
                     except Exception:
                         reply = "Theory lookup module active."
                 st.session_state.chat_history.append({"role": "assistant", "content": reply})
@@ -395,39 +382,67 @@ with tab_drill:
                 audio_bytes = audio_value.read()
                 with st.spinner("Analyzing pitch trajectory..."):
                     trajectory = analyze_directional_pitch_trajectory(
-                        audio_bytes, drill_direction.upper()
+                        audio_bytes, drill_direction.upper(), num_notes=len(target_sequence)
                     )
                     st.session_state.recorded_trajectory = trajectory
 
-                    if client:
-                        prompt = f"""
-                        You are an expert Hindustani Classical Vocal Guru evaluating a student's
-                        isolated practice recording. They are singing the {drill_direction} scale
-                        of Raaga {orch.state.active_raaga} relative to a base Sa of {orch.state.tonic_hz} Hz.
+                    detected_count = sum(1 for hz in trajectory if hz is not None)
+                    if detected_count == 0:
+                        st.session_state.live_guru_text = None
+                        st.warning(
+                            "Couldn't detect a clear pitch in that recording — "
+                            "try again a little closer to the mic, and make sure "
+                            "there's minimal background noise."
+                        )
+                    else:
+                        # Represent undetected chunks explicitly rather than as
+                        # a bare `None`, so the prompt (and the model) treat
+                        # them as missing data, not a value to reason about.
+                        readable_trajectory = [
+                            f"{hz} Hz" if hz is not None else "no clear pitch detected"
+                            for hz in trajectory
+                        ]
 
-                        Expected swara order: {', '.join(target_sequence)}
-                        Parsed frequency sequence from their recording: {trajectory} Hz.
-
-                        Evaluate alignment directly:
-                        - Note whether the sequence climbs/falls smoothly along the target intervals.
-                        - Point out which swaras are sharp (Teevra) or flat (Komal).
-                        Give a precise, encouraging 2-sentence lesson.
-                        """
-                        try:
-                            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-                            st.session_state.live_guru_text = response.text.strip()
-                        except Exception:
-                            st.session_state.live_guru_text = (
-                                "Your steady breath on Sa is strong. Keep the vocal column centered as you expand."
+                        if detected_count < len(trajectory):
+                            st.info(
+                                f"Detected pitch in {detected_count} of {len(trajectory)} "
+                                f"segments — the rest may have been too quiet or noisy."
                             )
+
+                        if client:
+                            prompt = f"""
+                            You are an expert Hindustani Classical Vocal Guru evaluating a student's
+                            isolated practice recording. They are singing the {drill_direction} scale
+                            of Raaga {orch.state.active_raaga} relative to a base Sa of {orch.state.tonic_hz} Hz.
+
+                            Expected swara order: {', '.join(target_sequence)}
+                            Parsed frequency sequence from their recording, in order: {', '.join(readable_trajectory)}.
+                            Some segments may say "no clear pitch detected" — treat those as missing
+                            data (e.g. a breath or gap), not as an intonation error.
+
+                            Evaluate alignment directly:
+                            - Note whether the sequence climbs/falls smoothly along the target intervals.
+                            - Point out which swaras are sharp (Teevra) or flat (Komal).
+                            Give a precise, encouraging 2-sentence lesson.
+                            """
+                            try:
+                                response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                                st.session_state.live_guru_text = response.text.strip()
+                            except Exception:
+                                st.session_state.live_guru_text = (
+                                    "Your steady breath on Sa is strong. Keep the vocal column centered as you expand."
+                                )
 
     with right:
         st.markdown("**2. Feedback**")
         if st.session_state.live_guru_text:
             with st.container(border=True):
                 st.markdown(f"🎙️ *{st.session_state.live_guru_text}*")
+                display_trajectory = [
+                    hz if hz is not None else "—" for hz in (st.session_state.recorded_trajectory or [])
+                ]
                 st.markdown(
-                    f'<span class="hz-mono">Tracked pitch: {st.session_state.recorded_trajectory} Hz</span>',
+                    f'<span class="hz-mono">Tracked pitch: {display_trajectory} Hz</span>',
                     unsafe_allow_html=True,
                 )
         else:
